@@ -1,0 +1,242 @@
+<html>
+
+<head>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.2/css/bulma.min.css">
+</head>
+
+<body>
+  <div class='m-5 p-5'>
+    <div class="field file has-name is-boxed is-link">
+      <label class="file-label">
+        <input id="upload" class="file-input" type="file" name="files[]">
+        <span class="file-cta">
+          <span class="file-label">
+            Escolher arquivo
+          </span>
+        </span>
+        <span class="file-name">
+          Nenhum arquivo selecionado
+        </span>
+      </label>
+    </div>
+
+    <div class="field">
+      <label class="label">Nome do filme</label>
+      <div class="control">
+        <input class="input" type="text" placeholder="Digite o nome do filme" id="movie-name" style="max-width: 15rem;">
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="control">
+        <button class="button is-link" onclick="onClick()" id='search'>Pesquisar filmes</button>
+      </div>
+    </div>
+
+    <div class="is-hidden" id="entry-movie">
+      <h1 class="title">Filme de entrada</h1>
+
+      <table class="table is-bordered" id="entry-movie-table">
+        <thead>
+          <tr>
+            <th>Título</th>
+            <th>Tipo</th>
+            <th>Atores</th>
+            <th>Diretores</th>
+            <th>Categorias</th>
+            <!-- <th>IMDB</th> -->
+            <th>Duração (minutos)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="p-5 m-5">
+    <h1 class="title">Filmes semelhantes</h1>
+    <table class="table is-hoverable is-fullwidth" id="movies-table">
+      <thead>
+        <tr>
+          <th>Título</th>
+          <th>Tipo</th>
+          <th>Atores</th>
+          <th>Diretores</th>
+          <th>Categorias</th>
+          <!-- <th>IMDB</th> -->
+          <th>Duração (minutos)</th>
+          <th>Similaridade</th>
+        </tr>
+      </thead>
+
+      <tbody>
+      </tbody>
+    </table>
+
+  </div>
+</body>
+
+</html>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.8.0/jszip.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.8.0/xlsx.js"></script>
+<script>
+  let movies
+
+  async function parseExcel(file) {
+    const reader = new FileReader();
+
+    reader.onload = function (e) {
+      var data = e.target.result;
+      var workbook = XLSX.read(data, {
+        type: 'binary'
+      });
+
+      workbook.SheetNames.forEach(function (sheetName) {
+        var XL_row_object = XLSX.utils.sheet_to_row_object_array(workbook.Sheets[sheetName]);
+        movies = XL_row_object
+      })
+    };
+
+    reader.onerror = function (ex) {
+      console.log(ex);
+    };
+
+    reader.readAsBinaryString(file);
+  };
+
+  async function handleFileSelect(event) {
+    const searchButton = document.querySelector('#search')
+
+    const files = event.target.files; // FileList object
+    const parsedExcel = await parseExcel(files[0]);
+
+    const fileName = document.querySelector('.file-name');
+    fileName.textContent = files[0].name;
+  }
+
+  function onClick() {
+    const movieName = document.querySelector('#movie-name').value
+    const entryMovie = movies.find(movie => movie.title == movieName)
+    console.log(entryMovie)
+
+    document.querySelector('#entry-movie').classList.remove('is-hidden')
+
+    const entryMovieTable = document.querySelector('#entry-movie-table tbody')
+
+    let entryCategory
+
+    if (entryMovie.category === 'Dramas' || entryMovie.category === 'Drama') {
+      entryCategory = 'Drama'
+    } else if (entryMovie.category === 'Action') {
+      entryCategory = 'Ação'
+    } else if (entryMovie.category === 'Documentary') {
+      entryCategory = 'Documentário'
+    } else if (entryMovie.category === 'Horror') {
+      entryCategory = 'Terror'
+    } else if (entryMovie.category === 'Comedy' || entryMovie.category === 'Comedies') {
+      entryCategory = 'Comédia'
+    } else if (entryMovie.category === 'Biography') {
+      entryCategory = 'Biografia'
+    } else if (entryMovie.category === 'Fantasy') {
+      entryCategory = 'Fantasia'
+    }
+
+    let html = `<tr><td>${entryMovie.title}</td><td>${entryMovie.type === 'TV' ? 'Série' : 'Filme'}</td>`
+    html += `<td>${entryMovie.actors}</td><td>${entryMovie.director}</td>`
+    html += `<td>${entryCategory || entryMovie.category}</td>`
+    html += `<td>${entryMovie.runtime.match(/\d+/g)}</td></tr>`
+
+    entryMovieTable.innerHTML += html
+
+    const moviesWithSimilarity = movies.map((movie) => {
+      let similarity = 0
+
+      const actors = movie.actors.split(',')
+      const entryActors = entryMovie.actors.split(',')
+
+      // Similaridade do tipo
+      if (movie.type === entryMovie.type) {
+        similarity = 0.4
+      }
+
+      // Similaridade de atores
+      actors.forEach((actor) => {
+        entryActors.forEach((entryActor) => {
+          if (actor.trim() === entryActor.trim()) {
+            similarity += 0.6
+          }
+        })
+      })
+
+      const directors = movie.director.split(',')
+      const entryDirectors = entryMovie.director.split(',')
+
+      // Similaridade de diretores
+      directors.forEach((director) => {
+        entryDirectors.forEach((entryDirector) => {
+          if (director.trim() === entryDirector.trim()) {
+            similarity += 0.9
+          }
+        })
+      })
+
+      // Similaridade de categorias
+      if (movie.category === entryMovie.category) {
+        similarity += 1
+      } else if ((movie.category === 'Drama' && entryMovie.category === 'Dramas') || (movie.category === 'Dramas' && entryMovie.category === 'Drama')) {
+        similarity += 1
+      } else if ((movie.category === 'Comedy' && entryMovie.category === 'Comedies') || (movie.category === 'Comedies' && entryMovie.category === 'Comedy')) {
+        similarity += 1
+      }
+
+      //Similaridade de duração
+      if (movie.runtime.match(/\d+/g) === entryMovie.runtime.match(/\d+/g)) {
+        similarity += 0.2
+      }
+
+      movie.similarity = similarity / 3.1
+      return movie
+    })
+
+    const moviesSortedBySimilarity = moviesWithSimilarity.sort((a, b) => {
+      return b.similarity - a.similarity
+    })
+
+    // Faz a tabela de filmes
+    moviesSortedBySimilarity.forEach((movie) => {
+      if (entryMovie.title === movie.title) {
+        return
+      }
+
+      let category
+
+      if (movie.category === 'Dramas' || movie.category === 'Drama') {
+        category = 'Drama'
+      } else if (movie.category === 'Action') {
+        category = 'Ação'
+      } else if (movie.category === 'Documentary') {
+        category = 'Documentário'
+      } else if (movie.category === 'Horror') {
+        category = 'Terror'
+      } else if (movie.category === 'Comedy' || movie.category === 'Comedies') {
+        category = 'Comédia'
+      } else if (movie.category === 'Biography') {
+        category = 'Biografia'
+      } else if (movie.category === 'Fantasy') {
+        category = 'Fantasia'
+      }
+
+      let html = `<tr><td>${movie.title}</td><td>${movie.type === 'TV' ? 'Série' : 'Filme'}</td>`
+      html += `<td>${movie.actors}</td><td>${movie.director}</td>`
+      html += `<td>${category || movie.category}</td>`
+      html += `<td>${movie.runtime.match(/\d+/g)}</td>`
+      html += `<td>${(movie.similarity * 100).toFixed(2)}%</td></tr>`
+
+      const moviesTable = document.querySelector('#movies-table tbody')
+      moviesTable.innerHTML += html
+    })
+  }
+
+  document.getElementById('upload').addEventListener('change', handleFileSelect, false);
+</script>
